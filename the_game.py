@@ -29,6 +29,9 @@ class Player:
         self.ability = ability
         self.area_index = 0
         self.army_men = 0
+        self.mount = None          # the animal the player may ride
+        self.inventory = []        # items purchased from merchants
+        self.damage_bonus = 0      # bonus to damage from weapons
         # define progression areas
         self.areas = [
             'Grassland',
@@ -37,12 +40,17 @@ class Player:
             'Frozen Land',
             'Volcano'
         ]
+        self.visited = {0}         # track visited area indices
 
     def __str__(self):
         area = self.areas[self.area_index] if 0 <= self.area_index < len(self.areas) else 'Unknown'
         base = f"Player: {self.name}, Area: {area}, Health: {self.health}, Food: {self.food}, Money: {self.money}, Army: {self.army_men} men"
+        if self.mount:
+            base += f", Mount: {self.mount}"
         if self.armour or self.weapon or self.ability:
             base += f", Armour: {self.armour}, Weapon: {self.weapon}, Ability: {self.ability}"
+        if self.inventory:
+            base += f", Inventory: {', '.join(self.inventory)}"
         return base
 
     def gain_money(self, amount):
@@ -58,12 +66,12 @@ class Player:
             slow_print(f"{self.name} took {amount} damage. Health: {self.health}")
 
     def eat_food(self):
-        if self.money >= 10:
-            self.money -= 10
+        # no longer costs money to eat
+        if self.food < 100:
             self.food = min(100, self.food + 20)
-            slow_print(f"{self.name} ate food. Food: {self.food}, Money: {self.money}")
+            slow_print(f"{self.name} ate food. Food: {self.food}")
         else:
-            slow_print(f"{self.name} doesn't have enough money to eat.")
+            slow_print(f"{self.name} is already full and doesn't need to eat.")
 
     def spend_money(self, amount):
         if self.money >= amount:
@@ -87,6 +95,8 @@ class Player:
     def travel(self):
         # multi-step travel system with path selection and delayed encounters
         # provide a longer narrative depending on step and area
+        if self.mount:
+            slow_print(f"You saddle up and ride your {self.mount.lower()} as you set off.")
         story_lines = {
             'Grassland': [
                 "The grass sways like waves as a warm breeze brushes your face.",
@@ -129,6 +139,8 @@ class Player:
             # continuing along a previously chosen path
             self.travel_steps -= 1
             slow_print(f"You continue your journey through the {self.areas[self.area_index]}...")
+            if self.mount:
+                slow_print(f"Riding your {self.mount.lower()}, you press onward.")
             # print two lines of story to make each step feel longer
             area = self.areas[self.area_index]
             lines = story_lines.get(area, [])
@@ -254,12 +266,16 @@ class Player:
                 # no previous area, stay or random
                 self.next_area_index = self.area_index
             slow_print("You veer left, hugging familiar paths.")
+            if self.mount:
+                slow_print(f"Your {self.mount.lower()} adjusts its pace, carrying you onward.")
             direction_story('left', area)
         elif choice == '2':
             # forward: medium journey to next area
             self.travel_steps = 2
             self.next_area_index = min(self.area_index + 1, len(self.areas) - 1)
             slow_print("You stride forward toward the horizon.")
+            if self.mount:
+                slow_print(f"Your {self.mount.lower()} happily trots along by your side.")
             direction_story('forward', area)
         else:
             # right: longer, unpredictable path
@@ -267,6 +283,8 @@ class Player:
             possible = [i for i in range(len(self.areas)) if i != self.area_index]
             self.next_area_index = random.choice(possible) if possible else self.area_index
             slow_print("You cut right, diving into uncharted territory.")
+            if self.mount:
+                slow_print(f"Your {self.mount.lower()} snorts nervously but follows bravely.")
             direction_story('right', area)
 
     def _travel_encounter(self):
@@ -395,13 +413,7 @@ class Player:
             else:
                 slow_print(f"'No purchase today, I see.' The merchant bows and vanishes into the mist.")
 
-        # move on or boss as before
-        if self.area_index < len(self.areas) - 1:
-            self.area_index += 1
-        elif area == 'Volcano':
-            slow_print("You have reached the final volcano area - prepare for the boss!")
-            if not hasattr(self, 'boss_defeated') or not self.boss_defeated:
-                self.boss_battle()
+        # after encountering surroundings, reward, and shop we progress or trigger boss once
         if random.random() < 0.25:
             chest_money = random.randint(10, 50)
             slow_print(f"You discover a magical chest containing {chest_money} gold coins!")
@@ -447,15 +459,15 @@ class Player:
         if self.area_index < len(self.areas) - 1:
             self.area_index += 1
         elif area == 'Volcano':
-            slow_print("You have reached the final volcano area - prepare for the boss!")
-            # trigger boss fight once
+            # only announce and fight once
             if not hasattr(self, 'boss_defeated') or not self.boss_defeated:
+                slow_print("You have reached the final volcano area - prepare for the boss!")
                 self.boss_battle()
 
     def fight_in_battle(self):
         # basic random damage
         damage_taken = random.randint(5, 15)
-        damage_dealt = random.randint(10, 25)
+        damage_dealt = random.randint(10, 25) + self.damage_bonus
 
         # apply ability modifiers (cooler ability names retained and extended)
         if self.ability in ('shield wall', 'block'):
@@ -496,6 +508,7 @@ class Player:
             animal = animals[choice]
             if self.money >= animal['cost']:
                 self.money -= animal['cost']
+                self.mount = animal['name']
                 slow_print(f"Excellent choice! You now own a {animal['name']}!")
                 if animal['name'] == 'Horse':
                     slow_print("Your horse neighs proudly as you mount up. Your travels will be much swifter!")
@@ -520,6 +533,11 @@ class Player:
             input("Press Enter to strike the boss!")
             damage = self.fight_in_battle()
             boss_hp -= damage
+            # army assistance
+            if self.army_men > 0:
+                assist = random.randint(1, 3) * self.army_men
+                boss_hp -= assist
+                slow_print(f"Your {self.army_men} soldiers swarm the boss, dealing {assist} extra damage!")
             if boss_hp <= 0:
                 slow_print("Your final strike connects with perfect precision!")
                 slow_print("The Volcano Lord screams in agony as it crumbles into ash.")
@@ -528,6 +546,18 @@ class Player:
                 break
             # boss counter-attack
             boss_attack = random.randint(25, 40)
+            # army intercepts some damage
+            if self.army_men > 0:
+                block = min(self.army_men * 3, boss_attack)
+                boss_attack -= block
+                slow_print(f"Your army absorbs {block} of the boss's attack!")
+                # some soldiers may fall
+                lost = random.randint(0, min(self.army_men, 2))
+                if lost > 0:
+                    self.army_men -= lost
+                    slow_print(f"The boss slashes through your ranks; {lost} soldiers are lost.")
+                else:
+                    slow_print("Your soldiers hold the line steadfastly.")
             slow_print(f"The Volcano Lord retaliates with a devastating strike!")
             slow_print(f"Searing flames engulf you as you take {boss_attack} damage!")
             self.take_damage(boss_attack)
@@ -544,7 +574,10 @@ class Player:
 
 
 if __name__ == "__main__":
-    player_name = "Traveler"
+    # allow the user to enter a custom name for the hero
+    player_name = input("What is your name, brave adventurer? ").strip()
+    if not player_name:
+        player_name = "Traveler"
 
     # choose a knight with cooler, themed options
     knights = {
@@ -559,7 +592,7 @@ if __name__ == "__main__":
         '5': { 'name': 'Shade the Shadowblade', 'armour': 'dark leather', 'weapon': 'twin daggers', 'ability': 'shadow strike',
                'desc': 'a stealthy assassin who strikes unseen'},
     }
-    slow_print("Welcome, traveler! A grand adventure awaits...")
+    slow_print(f"Welcome, {player_name}! A grand adventure awaits...")
     slow_print("Choose a knight:")
     for key, info in knights.items():
         slow_print(f"{key}. {info['name']} - {info['desc']} (armour: {info['armour']}, weapon: {info['weapon']}, ability: {info['ability']})")
@@ -568,7 +601,7 @@ if __name__ == "__main__":
         choice = input("Enter 1-5: ").strip()
     info = knights[choice]
     player = Player(player_name, armour=info['armour'], weapon=info['weapon'], ability=info['ability'])
-    slow_print(f"You have chosen {info['name']} - {info['desc']}")
+    slow_print(f"You are {player_name}, taking on the role of {info['name']} - {info['desc']}")
     slow_print(f"Your quest begins now. May fortune favor the bold.")
     
     player.buy_animal()
