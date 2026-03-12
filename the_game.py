@@ -480,6 +480,35 @@ class Player:
         print(f"{self.name} dealt {damage_dealt} damage in battle.")
         return damage_dealt
 
+    def buy_animal(self):
+        """Allow the player to buy a mount."""
+        slow_print("\nA traveling merchant with exotic animals approaches you!")
+        slow_print("'Looking for a fine mount, traveler?' the merchant asks with a grin.")
+        animals = {
+            '1': {'name': 'Horse', 'cost': 15, 'desc': 'A majestic and swift steed'},
+            '2': {'name': 'Camel', 'cost': 18, 'desc': 'A hardy beast built for desert travel'},
+            '3': {'name': 'Giant Armadillo', 'cost': 20, 'desc': 'A peculiar creature that rolls into a ball'}
+        }
+        for key, animal in animals.items():
+            slow_print(f"{key}. {animal['name']} - {animal['cost']} gold ({animal['desc']})")
+        choice = input("Enter animal number to buy or press Enter to skip: ").strip()
+        if choice in animals:
+            animal = animals[choice]
+            if self.money >= animal['cost']:
+                self.money -= animal['cost']
+                slow_print(f"Excellent choice! You now own a {animal['name']}!")
+                if animal['name'] == 'Horse':
+                    slow_print("Your horse neighs proudly as you mount up. Your travels will be much swifter!")
+                elif animal['name'] == 'Camel':
+                    slow_print("Your camel grunts contentedly, ready to traverse the harshest terrains!")
+                elif animal['name'] == 'Giant Armadillo':
+                    slow_print("Your armadillo rolls excitedly in circles around you. How delightfully bizarre!")
+                slow_print(f"Remaining money: {self.money}")
+            else:
+                slow_print(f"You don't have enough gold for that. You need {animal['cost'] - self.money} more gold.")
+        else:
+            slow_print("The merchant tips his hat and moves along to find another customer.")
+
     def boss_battle(self):
         """A tough final boss encounter for the volcano area."""
         slow_print("The ground trembles violently beneath your feet...")
@@ -515,7 +544,7 @@ class Player:
 
 
 if __name__ == "__main__":
-    player_name = input("Enter your player name: ")
+    player_name = "Traveler"
 
     # choose a knight with cooler, themed options
     knights = {
@@ -540,7 +569,9 @@ if __name__ == "__main__":
     info = knights[choice]
     player = Player(player_name, armour=info['armour'], weapon=info['weapon'], ability=info['ability'])
     slow_print(f"You have chosen {info['name']} - {info['desc']}")
-    slow_print(f"Your quest begins now, {player_name}. May fortune favor the bold.")
+    slow_print(f"Your quest begins now. May fortune favor the bold.")
+    
+    player.buy_animal()
     
     while player.health > 0:
         slow_print("\n" + str(player))
