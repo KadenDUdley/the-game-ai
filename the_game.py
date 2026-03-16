@@ -4,7 +4,7 @@ import sys
 import time
 
 
-def slow_print(message: str, delay: float = 0.05) -> None:
+def slow_print(message: str, delay: float = 0.025) -> None:
     """Prints a message to stdout one character at a time, pausing between each.
 
     Args:
@@ -258,29 +258,43 @@ class Player:
 
         area = self.areas[self.area_index]
         if choice == '1':
-            # left: short journey back or around
+            # left: short journey back or around (but not to visited areas)
             self.travel_steps = 1
             if self.area_index > 0:
-                self.next_area_index = self.area_index - 1
+                # find an unvisited area going backward
+                for i in range(self.area_index - 1, -1, -1):
+                    if i not in self.visited:
+                        self.next_area_index = i
+                        break
+                else:
+                    # all backward areas visited, stay in place
+                    self.next_area_index = self.area_index
             else:
-                # no previous area, stay or random
+                # no previous area, stay
                 self.next_area_index = self.area_index
             slow_print("You veer left, hugging familiar paths.")
             if self.mount:
                 slow_print(f"Your {self.mount.lower()} adjusts its pace, carrying you onward.")
             direction_story('left', area)
         elif choice == '2':
-            # forward: medium journey to next area
+            # forward: medium journey to next unvisited area
             self.travel_steps = 2
-            self.next_area_index = min(self.area_index + 1, len(self.areas) - 1)
+            # find next unvisited area
+            for i in range(self.area_index + 1, len(self.areas)):
+                if i not in self.visited:
+                    self.next_area_index = i
+                    break
+            else:
+                # all forward areas visited, stay
+                self.next_area_index = self.area_index
             slow_print("You stride forward toward the horizon.")
             if self.mount:
                 slow_print(f"Your {self.mount.lower()} happily trots along by your side.")
             direction_story('forward', area)
         else:
-            # right: longer, unpredictable path
+            # right: longer, unpredictable path to unvisited areas only
             self.travel_steps = 3
-            possible = [i for i in range(len(self.areas)) if i != self.area_index]
+            possible = [i for i in range(len(self.areas)) if i != self.area_index and i not in self.visited]
             self.next_area_index = random.choice(possible) if possible else self.area_index
             slow_print("You cut right, diving into uncharted territory.")
             if self.mount:
@@ -289,6 +303,8 @@ class Player:
 
     def _travel_encounter(self):
         """Handle encounters after completing a travel segment."""
+        # mark current area as visited
+        self.visited.add(self.area_index)
         area = self.areas[self.area_index]
         # delayed enemy encounter
         slow_print("You venture forth, eyes peeled for danger...")
@@ -375,17 +391,24 @@ class Player:
             self.gain_money(chest_money)
 
         # store
-        if random.random() < 0.3:
+        if random.random() < 0.5:
             slow_print("A figure emerges from the mist, wrapped in tattered robes.")
             slow_print("It's a wandering merchant, laden with mysterious wares and exotic goods.")
             slow_print("'Care to peruse my inventory, traveler?' the merchant asks with a knowing smile.")
-            store_items = [
-                ("healing potion", 20),
-                ("steel shield", 30),
-                ("enchanted sword", 40),
-                ("food rations", 10),
-                ("recruit soldiers (5 men)", 25)
+            all_items = [
+                ("health potion", 15),
+                ("fire resistance ring", 35),
+                ("ancient tome", 25),
+                ("mana crystal", 20),
+                ("strength elixir", 30),
+                ("blessing scroll", 22),
+                ("crystal shard", 18),
+                ("enchanted amulet", 32),
+                ("moonstone", 28),
+                ("dragon scale", 40)
             ]
+            store_items = random.sample(all_items, min(5, len(all_items)))
+            store_items.append(("recruit soldiers (5 men)", 25))
             random.shuffle(store_items)
             for idx, (item, price) in enumerate(store_items, start=1):
                 slow_print(f"{idx}. {item} - {price} gold")
@@ -398,15 +421,11 @@ class Player:
                         self.money -= price
                         slow_print(f"'An excellent choice,' the merchant nods.")
                         slow_print(f"You trade {price} gold coins for the {item}.")
-                        if item == "healing potion":
-                            self.health = min(100, self.health + 30)
-                            slow_print(f"The potion warms your body, mending your wounds. Health +30!")
-                        elif item == "food rations":
-                            self.food = min(100, self.food + 20)
-                            slow_print(f"The rations are hearty and filling. Food +20!")
-                        elif "soldiers" in item:
+                        if "soldiers" in item:
                             self.army_men += 5
                             slow_print(f"Five battle-hardened soldiers step forward and pledge their service!")
+                        else:
+                            self.inventory.append(item)
                     else:
                         slow_print(f"The merchant scrutinizes you. 'I'm afraid you lack the coin for that, traveler.'")
                         slow_print(f"You don't have enough gold.")
@@ -420,15 +439,22 @@ class Player:
             self.gain_money(chest_money)
 
         # possible store encounter
-        if random.random() < 0.3:
+        if random.random() < 0.5:
             slow_print("A wandering merchant appears with some items for sale.")
-            store_items = [
-                ("healing potion", 20),
-                ("steel shield", 30),
-                ("enchanted sword", 40),
-                ("food rations", 10),
-                ("recruit soldiers (5 men)", 25)
+            all_items = [
+                ("health potion", 15),
+                ("fire resistance ring", 35),
+                ("ancient tome", 25),
+                ("mana crystal", 20),
+                ("strength elixir", 30),
+                ("blessing scroll", 22),
+                ("crystal shard", 18),
+                ("enchanted amulet", 32),
+                ("moonstone", 28),
+                ("dragon scale", 40)
             ]
+            store_items = random.sample(all_items, min(5, len(all_items)))
+            store_items.append(("recruit soldiers (5 men)", 25))
             random.shuffle(store_items)
             for idx, (item, price) in enumerate(store_items, start=1):
                 slow_print(f"{idx}. {item} - {price} money")
@@ -440,16 +466,11 @@ class Player:
                     if self.money >= price:
                         self.money -= price
                         slow_print(f"You bought {item} for {price} money. Remaining money: {self.money}")
-                        # apply item effect if applicable
-                        if item == "healing potion":
-                            self.health = min(100, self.health + 30)
-                            slow_print("Health restored by 30.")
-                        elif item == "food rations":
-                            self.food = min(100, self.food + 20)
-                            slow_print("Food increased by 20.")
-                        elif "soldiers" in item:
+                        if "soldiers" in item:
                             self.army_men += 5
-                            slow_print("5 soldiers have joined your army!")
+                            slow_print(f"5 soldiers have joined your army!")
+                        else:
+                            self.inventory.append(item)
                     else:
                         slow_print("You don't have enough money for that item.")
             else:
@@ -528,6 +549,35 @@ class Player:
         slow_print("A geyser of molten rock erupts before you!")
         slow_print("From the inferno emerges the Volcano Lord—a towering creature of flame and fury.")
         slow_print("Its eyes burn with ancient rage as it lets out a deafening roar that shakes the very air.")
+        
+        # offer to use items before battle
+        if self.inventory:
+            slow_print("\nYou sense the power within your inventory...")
+            slow_print("Your items:")
+            for idx, item in enumerate(self.inventory, start=1):
+                slow_print(f"{idx}. {item}")
+            use_choice = input("Enter item number to use or press Enter to save them: ").strip()
+            if use_choice.isdigit():
+                idx = int(use_choice) - 1
+                if 0 <= idx < len(self.inventory):
+                    item = self.inventory.pop(idx)
+                    if item == "health potion":
+                        self.health = min(100, self.health + 50)
+                        slow_print(f"You drink the health potion! Health +50!")
+                    elif item == "strength elixir":
+                        self.damage_bonus += 15
+                        slow_print(f"Power surges through you! Damage +15 for this battle!")
+                    elif item == "fire resistance ring":
+                        slow_print(f"The ring shimmers, protecting you from the flames!")
+                        self.health = min(100, self.health + 25)
+                        slow_print(f"Resistance granted! Health +25!")
+                    elif item == "ancient tome":
+                        self.damage_bonus += 10
+                        slow_print(f"Ancient knowledge flows into your mind! Damage +10!")
+                    elif item == "mana crystal":
+                        self.health = min(100, self.health + 40)
+                        slow_print(f"Magical energy restores you! Health +40!")
+        
         boss_hp = 200
         while boss_hp > 0 and self.health > 0:
             input("Press Enter to strike the boss!")
@@ -574,6 +624,7 @@ class Player:
 
 
 if __name__ == "__main__":
+    slow_print("Welcome to Knight's Odyssey!")
     # allow the user to enter a custom name for the hero
     player_name = input("What is your name, brave adventurer? ").strip()
     if not player_name:
@@ -606,7 +657,7 @@ if __name__ == "__main__":
     
     player.buy_animal()
     
-    while player.health > 0:
+    while player.health > 0 and not getattr(player, 'boss_defeated', False):
         slow_print("\n" + str(player))
         slow_print("\nWhat will you do next?")
         slow_print("1. Eat food (costs 10 gold, restores 20 food)")
